@@ -1,0 +1,84 @@
+---
+title: "Regression- Using Neural Nets"
+output: html_document
+date: "2026-02-27"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#two types of normalization in data: Z-scores, 
+train$NOX_Z <- (train$NOX-mean(train$NOX))/sd(train$NOX)
+train$TAX_Z <- (train$TAX-mean(train$TAX))/sd(train$TAX)
+
+###Implemenet Neural Network using nnet package
+###when using markdown, if R code is needed, insert R code in the code chunk
+```{r}
+library(caret)  
+library(tidyr)  
+library(ggcorrplot)  
+library(nnet) # Added nnet library  
+library(NeuralNetTools) # For visualization and weight interpretation 
+
+housing <- read.csv("06_Regression_Boston_Housing_Prices.csv")
+
+# Data cleaning 
+
+summary(housing) 
+
+# Replace the missing values with 0's in CRIM, ZN, INDUS, CHAS, AGE, LSTAT 
+
+housing$CRIM <- replace_na(housing$CRIM, 0)  
+housing$ZN <- replace_na(housing$ZN, 0)  
+housing$INDUS <- replace_na(housing$INDUS, 0)  
+housing$CHAS <- replace_na(housing$CHAS, 0)  
+housing$AGE <- replace_na(housing$AGE, 0)  
+housing$LSTAT <- replace_na(housing$LSTAT, 0) 
+
+ 
+# Additional scaling for Neural Networks.  
+maxs <- apply(housing, 2, max) 
+mins <- apply(housing, 2, min) 
+housing_scaled <- as.data.frame(scale(housing, center = mins, scale = maxs - mins)) 
+#1= row, 2= column
+maxs
+
+# Create Neural Net and train using train sample.  
+
+# Training and Test split using housing_scaled 
+
+set.seed(1234)  
+
+train_test_vector <- sample(c("Training", "Testing"), nrow(housing_scaled), 
+                            replace = T, prob = c(0.7, 0.3)) 
+
+train <- housing_scaled[train_test_vector == "Training", ]  
+test <- housing_scaled[train_test_vector == "Testing", ] 
+
+# # 3. Implement Neural Network using nnet ---- 
+
+set.seed(1234) # For reproducibility of random initial weights  
+nn_model <- nnet(MEDV ~ ., data = train, size = 2, # Number of hidden units 
+                 linout = TRUE, # TRUE for Regression (Linear Output) 
+                 maxit = 500, # Max iterations  
+                 decay = 0.01, # Weight decay to prevent over-fitting 
+                 trace = FALSE)
+#Since weights are hard to read as raw numbers, we use Garson's Algorithm to identify which variables the network "cares" about most. 
+
+garson(nn_model) 
+summary(nn_model) 
+
+nn_pred_scaled <- predict(nn_model,test)
+nn_pred <- nn_pred_scaled * (maxs["MEDV"] - mins["MEDV"]) + mins["MEDV"] 
+plotnet(nn_model) 
+
+
+# In the output: 
+# b->h1: The bias (intercept) for the first hidden neuron.
+# i1->h1: The weight from the first input (CRIM) to the first hidden neuron. 
+# h1->o: The weight from the first hidden neuron to the final output.
+
+
+```
+
