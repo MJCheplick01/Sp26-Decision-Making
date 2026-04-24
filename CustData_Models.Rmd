@@ -1,0 +1,107 @@
+---
+title: "Custdata_Models"
+author: "MJC"
+date: "2026-03-13"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+housing <- read.csv("06_Regression_Boston_Housing_Prices.csv") 
+head(housing)
+install.packages
+library(caret)
+
+library(tidyverse) 
+housing$AGE <- replace_na(housing$AGE, 0) 
+housing$CRIM <- replace_na(housing$CRIM, 0) 
+housing$ZN <- replace_na(housing$ZN, 0) 
+housing$INDUS <- replace_na(housing$INDUS, 0) 
+housing$CHAS <- replace_na(housing$CHAS, 0) 
+housing$LSTAT <- replace_na(housing$LSTAT, 0) 
+
+summary(housing)
+library(ggcorrplot)
+# Correlation analysis between IVs and DVs
+correlation_matrix <- cor(housing)
+# ?ggcorrplot()
+ggcorrplot(correlation_matrix, method = "square", lab = T, digits = 1, type = "lower" )
+
+# Step 2: 
+#2 . Training and Test split ----
+#  Sometimes validation sample is also used.
+#Use 70% data for training, 10% data for validation, 20% data for testing
+
+set.seed(1234)
+train_test_vector <- sample(c("Training", "Testing"), nrow(housing), replace = T, prob = c(0.7, 0.3))
+#Create train dataset
+train <- housing[train_test_vector == "Training", ]
+#Create test dataset
+test <- housing[train_test_vector == "Testing", ]
+
+# Select best model statistically by using the Adjusted R-Square
+lm_model <- lm(MEDV~., data=train) 
+summary(lm_model)
+
+min_model <- lm(MEDV~1, data = train)
+max_model <- step(min_model, 
+                  scope=(~ CRIM + ZN + INDUS + CHAS + NOX + 
+                           RM + AGE + DIS + RAD + TAX + PTRATIO + B + LSTAT),
+                  direction = "forward",
+                  trace = 1)
+summary(max_model)
+
+colnames(train)
+
+# 3. Cross-Validation ----
+# 10-fold cross-validation. 
+# 370 obs training dataset. Split it into 37 obs of 10 training samples. 
+# 9*37  for first iteration and get the parameters. Then test the parameters on 10th sample. 
+# repeat till all the test samples are exhausted and update the parameters. 
+
+# ?trainControl()
+
+training_params <- trainControl(method = "repeatedcv", 
+                                number = 10,
+                                repeats = 5,
+                                verboseIter = T)
+trainControl()
+# ?train() # multiple models, linear reg, logistic, SVM, 
+model_lm1 <- train(MEDV ~., 
+                   data = train, 
+                   method = "lm",
+                   trControl = training_params)
+summary(model_lm1)
+
+library(car)
+vif(max_model)
+#if VIF for variable is 1, then it is not having any serial correlation with other IVs.
+#5 is acceptable, 10 should be abs voided. Serial correlation= model fit issue.
+# price = y-int + beta_1 * Rooms + gamme_1*Penalty 
+# Penalty coefficients, SSE minimize error
+
+#Step Function -> why use Ridge/Lasso? Multiple variables, say 13, input into model, with 80+ variables, it will error Local Minimum, 
+
+# Ridge Regression  
+ridge_model <- train(MEDV~.,  
+                     data =  train, 
+                     method = 'glmnet', 
+                     tuneGrid = expand.grid(alpha = 0,  
+                                            lambda = seq(0, 5, length = 50)), # set alpha = 0 , lambda = 0 to 5 and set of 50  
+                     trControl = training_params) 
+
+ridge_model$bestTune
+
+testing_Error<- predictions- test$MEDV
+
+testing_Error<- na.omit(testing_Error)
+Training_Error <- sum((max_model$residuals)^2)/nrow(train)  
+Training_Error 
+
+predictions<-predict(ridge_model,test[c(-14)])
+head(predictions)
+rmse_test <- sqrt(testing_Error)
+rmse_test
+
+```
+
